@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Task Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .task { margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; }
+        #taskForm { display: none; position: fixed; top: 20%; left: 35%; background: #fff; padding: 20px; border: 2px solid #333; }
+        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+    <h1>Task Manager</h1>
+    <button onclick="showForm()">Add Task</button>
+
+    <div id="overlay" onclick="hideForm()"></div>
+
+    <div id="taskForm">
+        <form method="POST">
+            <label>Title:</label><br>
+            <input type="text" name="title" required><br><br>
+            <label>Description:</label><br>
+            <textarea name="description" required></textarea><br><br>
+            <label>Due Date:</label><br>
+            <input type="datetime-local" name="due_date" required><br><br>
+            <button type="submit">Add Task</button>
+            <button type="button" onclick="hideForm()">Cancel</button>
+        </form>
+    </div>
+
+    <h2>Tasks</h2>
+    {% for task in tasks %}
+        <div class="task">
+            <strong>{{ task.title }}</strong><br>
+            {{ task.description }}<br>
+            <em>Due: {{ task.due_date }}</em>
+        </div>
+    {% endfor %}
+
+    <script>
+        function showForm() {
+            document.getElementById('taskForm').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+        }
+        function hideForm() {
+            document.getElementById('taskForm').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

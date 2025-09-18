@@ -1,0 +1,79 @@
+
+login_form = """
+<!doctype html>
+<html>
+<head><title>Login</title></head>
+<body>
+    <h2>Login</h2>
+    <form method="POST">
+        <label>Email:</label><br>
+        <input type="text" name="email" required><br><br>
+
+        <label>Password:</label><br>
+        <input type="password" name="password" required><br><br>
+
+        <input type="submit" value="Login">
+    </form>
+    <p style="color:red;">{{ message }}</p>
+    <p>Don't have an account? <a href="/register">Register here</a></p>
+    <p><a href="/forgot">Forgot Password?</a></p>
+</body>
+</html>
+"""
+
+register_form = """
+<!doctype html>
+<html>
+<head><title>Register</title></head>
+<body>
+    <h2>Create an Account</h2>
+    <form method="POST">
+        <label>Email:</label><br>
+        <input type="text" name="email" required><br><br>
+
+        <label>Password (min 8 chars):</label><br>
+        <input type="password" name="password" required><br><br>
+
+        <input type="submit" value="Register">
+    </form>
+    <p style="color:red;">{{ message }}</p>
+    <p>Already have an account? <a href="/">Login here</a></p>
+</body>
+</html>
+"""
+
+forgot_form = """
+<!doctype html>
+<html>
+<head><title>Forgot Password</title></head>
+<body>
+    <h2>Forgot Password</h2>
+    <form method="POST">
+        <label>Email:</label><br>
+        <input type="text" name="email" required><br><br>
+        <input type="submit" value="Send Verification Code">
+    </form>
+    <p style="color:red;">{{ message }}</p>
+</body>
+</html>
+"""
+
+verify_form = """
+<!doctype html>
+<html>
+<head><title>Verify Code</title></head>
+<body>
+    <h2>Verify Code & Reset Password</h2>
+    <form method="POST">
+        <label>Verification Code:</label><br>
+        <input type="text" name="code" required><br><br>
+
+        <label>New Password:</label><br>
+        <input type="password" name="new_password" required><br><br>
+
+        <input type="submit" value="Reset Password">
+    </form>
+    <p style="color:red;">{{ message }}</p>
+</body>
+</html>
+"""
