@@ -6,7 +6,11 @@ body {
   align-items: center;
   padding-top: 40px;
   background-color: #f0f0f0;
+  color: black;
+  transition: background-color 0.3s, color 0.3s;
 }
+
+
 
 form {
   padding: 20px;
@@ -37,6 +41,28 @@ input[type="submit"] {
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*body.dark-mode {*/
+/*    background-color: #121212;*/
+/*    color: black;*/
+/*}*/
 
 
 

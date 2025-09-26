@@ -1,9 +1,14 @@
 import sqlite3
 from flask import Flask, request, render_template_string, redirect, url_for
+from datetime import datetime
 
+ # Replace with a secure key
 
 
 app = Flask(__name__)
+app.secret_key = "your_secret_key_here"
+
+
 #List for tasks
 tasks = []
 #List for emails if a reset is needed
@@ -55,6 +60,7 @@ login_form = """
         <p>Don't have an account? <a href="/register">Register here</a></p>
         <p><a href="/verify">Forgot Password?</a></p>
     </div>
+</body>
 </body>
 </html>
 """
@@ -128,6 +134,71 @@ verify_form = """
         <input type="submit" value="Verify">
     </form>
     <p style="color:red;">{{ message }}</p>
+</body>
+</html>
+"""
+
+#Task adding template
+
+home_template = """
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='home.css') }}">
+    <title>Task Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .task { margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; }
+        #taskForm { display: none; position: fixed; top: 20%; left: 35%; background: #fff; padding: 20px; border: 2px solid #333; }
+        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+            <nav class="navbar">
+                <a href="/home">Home</a>
+                <a href="/analysis">Analytics</a>
+                <a href="/">Log Out</a>
+            </nav>
+        </header>
+    <h1>Task Manager</h1>
+    <button onclick="showForm()">Add Task</button>
+
+    <div id="overlay" onclick="hideForm()"></div>
+
+    <div id="taskForm">
+        <form method="POST">
+            <label>Title:</label><br>
+            <input type="text" name="title" required><br><br>
+            <label>Description:</label><br>
+            <textarea name="description" required></textarea><br><br>
+            <label>Due Date:</label><br>
+            <input type="datetime-local" name="due_date" required><br><br>
+            <button type="submit">Add Task</button>
+            <button type="button" onclick="hideForm()">Cancel</button>
+        </form>
+    </div>
+
+    <h2>Tasks</h2>
+    {% for task in tasks %}
+        <div class="task">
+            <strong>{{ task.title }}</strong><br>
+            {{ task.description }}<br>
+            <em>Due: {{ task.due_date }}</em>
+        </div>
+    {% endfor %}
+
+    <script>
+        function showForm() {
+            document.getElementById('taskForm').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+        }
+        function hideForm() {
+            document.getElementById('taskForm').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+        }
+    </script>
 </body>
 </html>
 """
@@ -227,82 +298,28 @@ def verify_code():
 
 
 
-
-
+#Route to homepage
 @app.route('/home', methods=['GET', 'POST'])
 def home():
-    return "Hello"
+    if request.method == 'POST':
+        title = request.form['title']
+        description = request.form['description']
+        due_date_str = request.form['due_date']
+
+        # Convert string to datetime object
+        try:
+            due_date = datetime.strptime(due_date_str, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            due_date = "Invalid date"
+
+        # Add task to list
+        tasks.append({
+            'title': title,
+            'description': description,
+            'due_date': due_date.strftime('%Y-%m-%d %H:%M') if isinstance(due_date, datetime) else due_date
+        })
+
+        return redirect(url_for("home"))
 
 
-
-'''
-Task Algorithm
- |
- |   Cycle 1:
- |-> Add tasks (exclusive to the user) ID:13
- |-> Remove/Complete Task ID:14
- |-> Create, remove and edit a label IDs: 8,9,10 (respectivley)
- |-> Edit Task ID: 15
-
- |
- |   Cycle 2:
- |-> Smart Schdueling (Time tabling) enter free hours/days, add events and create time table ID: 11
- |->
- |->
- |->
-
-
-
-'''
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    return render_template_string(home_template, tasks=tasks)
