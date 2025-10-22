@@ -177,7 +177,9 @@ def login():
         else:
             message = "Invalid email or password."
 
+    # This handles GET requests and also POST failures
     return render_template_string(login_form, message=message)
+
 
 
 #Register account
@@ -576,3 +578,6 @@ def scheduling():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+if __name__ == "__main__":
+    app.run(debug=True)
