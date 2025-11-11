@@ -6,7 +6,6 @@ import calendar
 
  # Replace with a secure key
 
-
 app = Flask(__name__)
 app.secret_key = "your_secret_key_here"
 
@@ -45,6 +44,24 @@ cursor.execute("""
         FOREIGN KEY (user_id) REFERENCES users(id)
     )
 """)
+
+
+
+# Events table
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+""")
+
+
+
 
 
 connection.commit()
@@ -177,9 +194,7 @@ def login():
         else:
             message = "Invalid email or password."
 
-    # This handles GET requests and also POST failures
     return render_template_string(login_form, message=message)
-
 
 
 #Register account
@@ -400,7 +415,7 @@ home_template = """
 
 # Editing Tasks
 @app.route("/edit_task", methods=["POST"])
-def edit_task(get_tasks,get_user_email):
+def edit_task(get_tasks, get_user_email):
     return render_template_string(home_template, tasks=get_tasks(), user_email=get_user_email(), show_edit_form=True, original_title=request.form["original_title"], original_due_date=request.form["original_due_date"])
 
 
@@ -500,9 +515,6 @@ scheduling_template = """
     <meta charset="UTF-8">
     <title>Scheduling</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='calendar.css') }}">
-    <style>
-
-    </style>
 </head>
 <body>
     <h2>Welcome, {{ user_email }}</h2>
@@ -516,13 +528,97 @@ scheduling_template = """
         </nav>
     </header>
 
+
+
     <h1>Calendar View - {{ now.strftime('%B %Y') }}</h1>
-    <div>
-        {{ calendar_html|safe }}
+
+    <div style="margin-bottom: 20px;">
+        <a href="/Scheduling?month={{ now.month - 1 if now.month > 1 else 12 }}&year={{ now.year if now.month > 1 else now.year - 1 }}">← Previous Month </a>
+         |
+        <a href="/Scheduling?month={{ now.month + 1 if now.month < 12 else 1 }}&year={{ now.year if now.month < 12 else now.year + 1 }}">Next Month →</a>
     </div>
+
+
+    <div>
+         {{ calendar_html|safe }}
+    </div>
+
+    <!-- Buttons to toggle forms -->
+    <button onclick="toggleForm('eventForm')">Add Event</button>
+    <button onclick="toggleForm('zoomForm')">Zoom into a Day</button>
+
+    <!-- Add Event Form -->
+    <div id="eventForm" style="display:none; margin-top:20px;">
+        <form method="POST">
+            <label>Title:</label><br>
+            <input type="text" name="title" required><br><br>
+
+            <label>Start Time:</label><br>
+            <input type="datetime-local" name="start_time" required><br><br>
+
+            <label>End Time:</label><br>
+            <input type="datetime-local" name="end_time" required><br><br>
+
+            <label>Description (optional):</label><br>
+            <textarea name="description"></textarea><br><br>
+
+            {% if message %}
+                <p style="color:red;">{{ message }}</p>
+                <label><input type="checkbox" name="confirm" value="yes" required> Confirm overlap and proceed</label><br><br>
+            {% endif %}
+
+            <input type="submit" value="Add Event">
+        </form>
+    </div>
+
+
+    <!-- Zoom Form -->
+    <div id="zoomForm" style="display:none;">
+        <form method="GET" action="/Scheduling/day">
+            <label>Select Day:</label><br>
+            <input type="date" name="date" required><br><br>
+            <input type="submit" value="View Day">
+        </form>
+    </div>
+
+    <script>
+        function toggleForm(id) {
+            const el = document.getElementById(id);
+            el.style.display = el.style.display === "none" ? "block" : "none";
+        }
+
+        {% if message %}
+            toggleForm('eventForm');
+        {% endif %}
+    </script>
+
 </body>
 </html>
 """
+
+
+# Over lapping
+def has_overlap(cursor, user_id, new_start, new_end):
+    cursor.execute("""
+        SELECT title FROM events
+        WHERE user_id=? AND (
+            (start_time < ? AND end_time > ?) OR
+            (start_time >= ? AND start_time < ?)
+        )
+    """, (user_id, new_end, new_start, new_start, new_end))
+    overlapping_events = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT title FROM tasks
+        WHERE user_id=? AND (
+            due_date BETWEEN ? AND ?
+        )
+    """, (user_id, new_start, new_end))
+    overlapping_tasks = cursor.fetchall()
+
+    return overlapping_events + overlapping_tasks
+
+
 
 
 
@@ -532,38 +628,140 @@ scheduling_template = """
 
 #Scheduling route
 
-@app.route("/Scheduling")
+@app.route("/Scheduling", methods=["GET", "POST"])
 def scheduling():
     user_id = session.get("user_id")
     if not user_id:
         return redirect(url_for("login"))
 
-    # Get current month and year
-    now = datetime.now()
-    year = now.year
-    month = now.month
+    year = int(request.args.get("year", datetime.now().year))
+    month = int(request.args.get("month", datetime.now().month))
+    now = datetime(year, month, 1)
+    message = ""
 
-    # Generate calendar HTML
-    cal = calendar.HTMLCalendar(calendar.MONDAY)
-    calendar_html = cal.formatmonth(year, month)
-
-    # Fetch user's email
     connection = sqlite3.connect("NEA.db")
     cursor = connection.cursor()
+
     cursor.execute("SELECT email FROM users WHERE id=?", (user_id,))
     result = cursor.fetchone()
+    user_email = result[0].split("@")[0].title() if result else "Unknown"
+
+    if request.method == "POST":
+        title = request.form["title"]
+        start_time = request.form["start_time"]
+        end_time = request.form["end_time"]
+        description = request.form.get("description", "")
+        confirm = request.form.get("confirm")
+
+        overlaps = has_overlap(cursor, user_id, start_time, end_time)
+        if overlaps and not confirm:
+            overlap_titles = ", ".join([o[0] for o in overlaps])
+            message = f"Overlaps with: {overlap_titles}. Resubmit to confirm."
+        else:
+            cursor.execute("""
+                INSERT INTO events (user_id, title, description, start_time, end_time)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, title, description, start_time, end_time))
+            connection.commit()
+
+    # Fetch events and tasks
+    cursor.execute("""
+        SELECT title, start_time FROM events
+        WHERE user_id=? AND strftime('%Y', start_time)=? AND strftime('%m', start_time)=?
+    """, (user_id, str(year), f"{month:02d}"))
+    events = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT title, due_date FROM tasks
+        WHERE user_id=? AND strftime('%Y', due_date)=? AND strftime('%m', due_date)=?
+    """, (user_id, str(year), f"{month:02d}"))
+    tasks = cursor.fetchall()
     connection.close()
 
-    if result:
-        user_email = result[0].split("@")[0].title()
-    else:
-        user_email = "Unknown"
+    # Organize by day
+    day_map = {}
+    for title, start in events:
+        try:
+            parsed_date = datetime.strptime(start, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            parsed_date = datetime.strptime(start, "%Y-%m-%d %H:%M")
+        day = parsed_date.day
 
-    # Render calendar template
-    return render_template_string(scheduling_template,calendar_html=calendar_html,user_email=user_email,now=now)
+        day_map.setdefault(day, []).append(f"Event: {title}")
+
+    for title, due_date in tasks:
+        try:
+            parsed_date = datetime.strptime(due_date, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            parsed_date = datetime.strptime(due_date, "%Y-%m-%d %H:%M")
+        day = parsed_date.day
+
+        day_map.setdefault(day, []).append(f"Task: {title}")
+
+    cal = calendar.HTMLCalendar(calendar.MONDAY)
+    calendar_html = cal.formatmonth(year, month)
+    for day, items in day_map.items():
+        item_list = "<br>".join(items)
+        calendar_html = calendar_html.replace(f">{day}<", f">{day}<br><h5>{item_list}</h5><")
+
+    return render_template_string(scheduling_template, calendar_html=calendar_html, user_email=user_email, now=now, message=message)
 
 
 
+# Zoom into a day
+@app.route("/Scheduling/day", methods=["GET"])
+def view_day():
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+
+    date_str = request.args.get("date")
+    connection = sqlite3.connect("NEA.db")
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT title, description, due_date, label, id FROM tasks WHERE user_id=? AND date(due_date)=?", (user_id, date_str))
+    tasks = cursor.fetchall()
+
+    cursor.execute("SELECT title, description, start_time, end_time, id FROM events WHERE user_id=? AND date(start_time)=?", (user_id, date_str))
+    events = cursor.fetchall()
+    connection.close()
+
+    sch_html = f"""
+    <html>
+        <body>
+            <h2>Schedule for {date_str}</h2>
+            <a href="/Scheduling">Back</a><br><br>
+
+            <h3>Tasks</h3>
+            {''.join([f"<div><strong>{t[0]}</strong>: {t[1]} ({t[2]})<form method='POST' action='/delete_task_day'><input type='hidden' name='id' value='{t[4]}'><input type='submit' value='Delete'></form></div>" for t in tasks]) or "No tasks"}
+
+            <h3>Events</h3>
+            {''.join([f"<div><strong>{e[0]}</strong>: {e[1]} ({e[2].replace('T', ' ')} to {e[3].replace('T', ' ')})<form method='POST' action='/delete_event_day'><input type='hidden' name='id' value='{e[4]}'><input type='submit' value='Delete'></form></div>" for e in events]) or "No events"}
+        </body>
+    </html>
+    """
+    return sch_html
+
+
+@app.route("/delete_task_day", methods=["POST"])
+def delete_task_day():
+    task_id = request.form["id"]
+    connection = sqlite3.connect("NEA.db")
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+    connection.commit()
+    connection.close()
+    return redirect(request.referrer)
+
+@app.route("/delete_event_day", methods=["POST"])
+def delete_event_day():
+    event_id = request.form["id"]
+    connection = sqlite3.connect("NEA.db")
+    cursor = connection.cursor()
+    cursor.execute("DELETE FROM events WHERE id=?", (event_id,))
+    connection.commit()
+    connection.close()
+    return redirect(request.referrer)
 
 
 
@@ -579,5 +777,107 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-if __name__ == "__main__":
-    app.run(debug=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''
+ |
+ |
+ |   Cycle 2:
+ |-> Smart Schdueling (Time tabling) enter free hours/days, add events and create time table (Calender view) ID: 11
+ |-> check if Date has already passed ID: 19
+ |-> Overlapping Tasks ID: 17
+ |-> Out of hours/ Unavaliable ID: 18
+ |-> Filtering ID: 22,23
+
+Add more text to explainations/objective and refceltions
+Add comments (in word) to pictures to descibe what each image is
+Add good example (about 10 ish (Berry said 5)) to the Evidence doc
+
+
+'''
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
