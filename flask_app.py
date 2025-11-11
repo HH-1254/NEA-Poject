@@ -400,7 +400,7 @@ home_template = """
 
 # Editing Tasks
 @app.route("/edit_task", methods=["POST"])
-def edit_task():
+def edit_task(get_tasks,get_user_email):
     return render_template_string(home_template, tasks=get_tasks(), user_email=get_user_email(), show_edit_form=True, original_title=request.form["original_title"], original_due_date=request.form["original_due_date"])
 
 
