@@ -117,7 +117,7 @@ register_form = """
         <input type="password" name="password" required><br><br>
 
         <label>Security Code (numbers only):</label><br>
-        <input type="text" name="security_code" pattern="\d+" required><br><br>
+        <input type="text" name="security_code" required><br><br>
 
         <input type="submit" value="Register">
     </form>
