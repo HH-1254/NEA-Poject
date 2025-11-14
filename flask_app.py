@@ -41,6 +41,7 @@ cursor.execute("""
         description TEXT NOT NULL,
         due_date TEXT NOT NULL,
         label TEXT,
+        progress INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES users(id)
     )
 """)
@@ -117,7 +118,7 @@ register_form = """
         <input type="password" name="password" required><br><br>
 
         <label>Security Code (numbers only):</label><br>
-        <input type="text" name="security_code" required><br><br>
+        <input type="text" name="security_code" pattern="[0-9]+" required><br><br>
 
         <input type="submit" value="Register">
     </form>
@@ -325,6 +326,27 @@ home_template = """
     <h1>Task Manager</h1>
     <button onclick="showForm()">Add Task</button>
 
+    <button onclick="toggleFilterForm()">Filter</button>
+
+    <div id="filterForm" style="display:none; margin-top:20px;">
+        <form method="GET" action="/home">
+            <label>Filter Word:</label><br>
+            <input type="text" name="query" placeholder="Enter filter word"><br><br>
+
+            <label>Search In:</label><br>
+            <input type="checkbox" name="fields" value="title"> Title<br>
+            <input type="checkbox" name="fields" value="description"> Description<br>
+            <input type="checkbox" name="fields" value="due_date"> Due Date<br>
+            <input type="checkbox" name="fields" value="label"> Label<br><br>
+
+            <button type="submit">Apply Filter</button>
+            <button type="button" onclick="toggleFilterForm()">Cancel</button>
+        </form>
+    </div>
+
+
+
+
     <div id="overlay" onclick="hideForm(); hideEditForm();"></div>
     <!-- Add Task Form -->
     <div id="taskForm">
@@ -337,6 +359,12 @@ home_template = """
             <input type="datetime-local" name="due_date" required><br><br>
             <label>Label:</label><br>
             <input type="text" name="label"><br><br>
+
+            <label>Progress:</label><br>
+            <input type="range" name="progress" min="0" max="100" value="0" step="10"
+                   oninput="this.nextElementSibling.value=this.value + '%'"><br>
+            <output>0%</output><br><br>
+
             <button type="submit">Add Task</button>
             <button type="button" onclick="hideForm()">Cancel</button>
         </form>
@@ -355,6 +383,12 @@ home_template = """
             <input type="datetime-local" name="due_date" required><br><br>
             <label>New Label:</label><br>
             <input type="text" name="label"><br><br>
+
+            <label>New Progress:</label><br>
+            <input type="range" name="progress" min="0" max="100" value="0" step="10"
+                   oninput="this.nextElementSibling.value=this.value + '%'"><br>
+            <output>0%</output><br><br>
+
             <button type="submit">Update Task</button>
             <button type="button" onclick="hideEditForm()">Cancel</button>
         </form>
@@ -406,6 +440,16 @@ home_template = """
         editForm.style.display = 'block';
         document.getElementById('overlay').style.display = 'block';
     }
+
+
+
+    function toggleFilterForm() {
+        const form = document.getElementById("filterForm");
+        form.style.display = form.style.display === "none" ? "block" : "none";
+    }
+
+
+
     </script>
 """
 
@@ -432,10 +476,13 @@ def update_task():
     new_description = request.form["description"]
     new_due_date = datetime.strptime(request.form["due_date"], '%Y-%m-%dT%H:%M').strftime('%Y-%m-%d %H:%M')
 
+    new_progress = int(request.form.get("progress", 0))
+
     cursor.execute("""
-        UPDATE tasks SET title=?, description=?, due_date=?
+        UPDATE tasks SET title=?, description=?, due_date=?, label=?, progress=?
         WHERE user_id=? AND title=? AND due_date=?
-    """, (new_title, new_description, new_due_date, user_id, original_title, original_due_date))
+    """, (new_title, new_description, new_due_date, request.form["label"], new_progress,
+          user_id, original_title, original_due_date))
     connection.commit()
     connection.close()
     return redirect(url_for("home"))
@@ -472,14 +519,18 @@ def home():
 
     # Fetch user's email
     cursor.execute("SELECT email FROM users WHERE id=?", (user_id,))
-    user_email = cursor.fetchone()[0].split("@")
-    user_email = user_email[0].title()
+    user_email = cursor.fetchone()[0].split("@")[0].title()
 
+    # Handle adding tasks
     if request.method == "POST":
         title = request.form["title"]
         description = request.form["description"]
         due_date_str = request.form["due_date"]
         label = request.form.get("label", "")
+        progress = int(request.form.get("progress", 0))
+
+
+
 
         try:
             due_date = datetime.strptime(due_date_str, '%Y-%m-%dT%H:%M')
@@ -488,19 +539,34 @@ def home():
             due_date_formatted = "Invalid date"
 
         cursor.execute("""
-            SELECT * FROM tasks WHERE user_id=? AND title=? AND due_date=?
-        """, (user_id, title, due_date_formatted))
+            INSERT INTO tasks (user_id, title, description, due_date, label, progress)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, title, description, due_date_formatted, label, progress))
         existing_task = cursor.fetchone()
 
         if not existing_task:
             cursor.execute("""
-                INSERT INTO tasks (user_id, title, description, due_date, label)
+                INSERT INTO tasks (user_id, title, description, due_date, label, progress)
                 VALUES (?, ?, ?, ?, ?)
-            """, (user_id, title, description, due_date_formatted, label))
+            """, (user_id, title, description, due_date_formatted, label, progress))
             connection.commit()
 
-    cursor.execute("SELECT title, description, due_date, label FROM tasks WHERE user_id=?", (user_id,))
-    tasks = [{'title': row[0], 'description': row[1], 'due_date': row[2], 'label': row[3]} for row in cursor.fetchall()]
+    # Handle filtering
+    query = request.args.get("query", "").strip()
+    fields = request.args.getlist("fields")
+
+    if query and fields:
+        conditions = " OR ".join([f"{field} LIKE ?" for field in fields])
+        params = [f"%{query}%"] * len(fields)
+        cursor.execute(f"""
+            SELECT title, description, due_date, label, progress FROM tasks
+            WHERE user_id=? AND ({conditions})
+        """, [user_id] + params)
+    else:
+        cursor.execute("SELECT title, description, due_date, label, progress FROM tasks WHERE user_id=?", (user_id,))
+
+    tasks = [{'title': row[0], 'description': row[1], 'due_date': row[2], 'label': row[3], 'progress' : row[4]} for row in cursor.fetchall()]
+    connection.close()
 
     return render_template_string(home_template, tasks=tasks, user_email=user_email)
 
@@ -829,54 +895,6 @@ Add good example (about 10 ish (Berry said 5)) to the Evidence doc
 
 
 '''
-
-if __name__ == "__main__":
-    app.run(debug=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
