@@ -830,6 +830,9 @@ Add good example (about 10 ish (Berry said 5)) to the Evidence doc
 
 '''
 
+if __name__ == "__main__":
+    app.run(debug=True)
+
 
 
 
