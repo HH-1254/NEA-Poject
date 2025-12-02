@@ -1,6 +1,6 @@
 import sqlite3
 from flask import Flask, request, render_template_string, redirect, url_for, session
-from datetime import datetime
+from datetime import datetime, timedelta
 import calendar
 
 
@@ -42,6 +42,24 @@ cursor.execute("""
         due_date TEXT NOT NULL,
         label TEXT,
         progress INTEGER DEFAULT 0,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+""")
+
+
+
+
+# Table for Completed Tasks
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS completed_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        due_date TEXT NOT NULL,
+        label TEXT,
+        progress INTEGER DEFAULT 100,
+        completed_at TEXT NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id)
     )
 """)
@@ -118,7 +136,7 @@ register_form = """
         <input type="password" name="password" required><br><br>
 
         <label>Security Code (numbers only):</label><br>
-        <input type="text" name="security_code" pattern="[0-9]+" required><br><br>
+        <input type="text" name="security_code" pattern="\d+" required><br><br>
 
         <input type="submit" value="Register">
     </form>
@@ -187,15 +205,38 @@ def login():
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM users WHERE email=? AND password=?", (email, password))
         user = cursor.fetchone()
-        connection.close()
 
         if user:
             session['user_id'] = user[0]
+
+            # Check for tasks due today or tomorrow
+            today = datetime.now().date()
+            tomorrow = today + timedelta(days=1)
+
+            cursor.execute("SELECT title, due_date FROM tasks WHERE user_id=?", (user[0],))
+            rows = cursor.fetchall()
+            connection.close()
+
+            due_soon = []
+            for title, due_date in rows:
+                try:
+                    parsed_date = datetime.strptime(due_date, "%Y-%m-%d %H:%M").date()
+                except ValueError:
+                    parsed_date = datetime.strptime(due_date, "%Y-%m-%dT%H:%M").date()
+
+                if parsed_date in [today, tomorrow]:
+                    due_soon.append(title)
+
+            # Store reminder in session
+            session['due_soon'] = due_soon
+
             return redirect(url_for("home"))
         else:
             message = "Invalid email or password."
+            connection.close()
 
     return render_template_string(login_form, message=message)
+
 
 
 #Register account
@@ -328,6 +369,9 @@ home_template = """
 
     <button onclick="toggleFilterForm()">Filter</button>
 
+    <button onclick="showMessage()">Check Status</button>
+    <p id="statusMessage" style="color:red; font-weight:bold;"></p>
+
     <div id="filterForm" style="display:none; margin-top:20px;">
         <form method="GET" action="/home">
             <label>Filter Word:</label><br>
@@ -362,8 +406,8 @@ home_template = """
 
             <label>Progress:</label><br>
             <input type="range" name="progress" min="0" max="100" value="0" step="10"
-                   oninput="this.nextElementSibling.value=this.value + '%'"><br>
-            <output>0%</output><br><br>
+                   oninput="document.getElementById('progressOutput').value=this.value + '%'">
+            <output id="progressOutput">0%</output><br><br>
 
             <button type="submit">Add Task</button>
             <button type="button" onclick="hideForm()">Cancel</button>
@@ -375,34 +419,47 @@ home_template = """
         <form method="POST" action="/update_task">
             <input type="hidden" name="original_title" id="editOriginalTitle">
             <input type="hidden" name="original_due_date" id="editOriginalDueDate">
+
             <label>New Title:</label><br>
             <input type="text" name="title" required><br><br>
+
             <label>New Description:</label><br>
             <textarea name="description" required></textarea><br><br>
+
             <label>New Due Date:</label><br>
             <input type="datetime-local" name="due_date" required><br><br>
+
             <label>New Label:</label><br>
             <input type="text" name="label"><br><br>
 
-            <label>New Progress:</label><br>
-            <input type="range" name="progress" min="0" max="100" value="0" step="10"
-                   oninput="this.nextElementSibling.value=this.value + '%'"><br>
-            <output>0%</output><br><br>
+            <label>Progress:</label><br>
+            <!-- Notice: no oninput here -->
+            <input type="range" name="progress" id="editProgress" min="0" max="100" step="10">
+            <output id="editProgressOutput"></output><br><br>
 
             <button type="submit">Update Task</button>
             <button type="button" onclick="hideEditForm()">Cancel</button>
         </form>
     </div>
 
+
+
     <!-- Task Display -->
     {% for task in tasks %}
-        <div class="task">
-            <strong>{{ task.title }}</strong><br>
-            {{ task.description }}<br>
-            <em>Due: {{ task.due_date }}</em><br>
-            {% if task.label %}
-                <strong>Label:</strong> {{ task.label }}<br>
-            {% endif %}
+        <div class="task" style="position: relative;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong>{{ task.title }}</strong><br>
+                    {{ task.description }}<br>
+                    <em>Due: {{ task.due_date }}</em><br>
+                    {% if task.label %}
+                        <strong>Label:</strong> {{ task.label }}<br>
+                    {% endif %}
+                </div>
+                <div style="text-align: right; min-width: 80px;">
+                    <strong>{{ task.progress }}%</strong>
+                </div>
+            </div>
             <button onclick="openEditForm('{{ task.title }}', '{{ task.description }}', '{{ task.due_date }}', '{{ task.label }}')">Edit</button>
             <form method="POST" action="/delete_task" style="display:inline;">
                 <input type="hidden" name="title" value="{{ task.title }}">
@@ -411,6 +468,8 @@ home_template = """
             </form>
         </div>
     {% endfor %}
+
+
     </body>
     <script>
 
@@ -448,9 +507,33 @@ home_template = """
         form.style.display = form.style.display === "none" ? "block" : "none";
     }
 
+    function showEditForm(task) {
+        document.getElementById('editProgress').value = task.progress;
+        document.getElementById('editProgressOutput').value = task.progress + '%';
+
+        document.getElementById('editOriginalTitle').value = task.title;
+        document.getElementById('editOriginalDueDate').value = task.due_date;
+
+
+        document.getElementById('editForm').style.display = 'block';
+    }
+
+    function showMessage() {
+        const msg = "{{ message }}";
+        if (msg) {
+            document.getElementById("statusMessage").innerText = msg;
+        } else {
+            document.getElementById("statusMessage").innerText = "No issues.";
+        }
+    }
+
 
 
     </script>
+
+
+
+
 """
 
 
@@ -475,14 +558,27 @@ def update_task():
     new_title = request.form["title"]
     new_description = request.form["description"]
     new_due_date = datetime.strptime(request.form["due_date"], '%Y-%m-%dT%H:%M').strftime('%Y-%m-%d %H:%M')
-
     new_progress = int(request.form.get("progress", 0))
+    new_label = request.form["label"]
 
-    cursor.execute("""
-        UPDATE tasks SET title=?, description=?, due_date=?, label=?, progress=?
-        WHERE user_id=? AND title=? AND due_date=?
-    """, (new_title, new_description, new_due_date, request.form["label"], new_progress,
-          user_id, original_title, original_due_date))
+    if new_progress == 100:
+        # Move to completed_tasks
+        cursor.execute("""
+            INSERT INTO completed_tasks (user_id, title, description, due_date, label, progress, completed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, new_title, new_description, new_due_date, new_label, 100, datetime.now().strftime('%Y-%m-%d %H:%M')))
+
+        cursor.execute("""
+            DELETE FROM tasks WHERE user_id=? AND title=? AND due_date=?
+        """, (user_id, original_title, original_due_date))
+    else:
+        # Just update in tasks
+        cursor.execute("""
+            UPDATE tasks SET title=?, description=?, due_date=?, label=?, progress=?
+            WHERE user_id=? AND title=? AND due_date=?
+        """, (new_title, new_description, new_due_date, new_label, new_progress,
+              user_id, original_title, original_due_date))
+
     connection.commit()
     connection.close()
     return redirect(url_for("home"))
@@ -499,7 +595,23 @@ def delete_task():
     title = request.form["title"]
     due_date = request.form["due_date"]
 
-    cursor.execute("DELETE FROM tasks WHERE user_id=? AND title=? AND due_date=?", (user_id, title, due_date))
+    # Fetch the task before deleting
+    cursor.execute("""
+        SELECT title, description, due_date, label, progress
+        FROM tasks WHERE user_id=? AND title=? AND due_date=?
+    """, (user_id, title, due_date))
+    task = cursor.fetchone()
+
+    if task:
+        # Insert into completed_tasks
+        cursor.execute("""
+            INSERT INTO completed_tasks (user_id, title, description, due_date, label, progress, completed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, task[0], task[1], task[2], task[3], 100, datetime.now().strftime('%Y-%m-%d %H:%M')))
+
+        # Delete from tasks
+        cursor.execute("DELETE FROM tasks WHERE user_id=? AND title=? AND due_date=?", (user_id, title, due_date))
+
     connection.commit()
     connection.close()
     return redirect(url_for("home"))
@@ -507,7 +619,10 @@ def delete_task():
 
 
 
-#Route to homepage
+
+
+# Home route
+
 @app.route("/home", methods=["GET", "POST"])
 def home():
     user_id = session.get("user_id")
@@ -517,20 +632,18 @@ def home():
     connection = sqlite3.connect("NEA.db")
     cursor = connection.cursor()
 
-    # Fetch user's email
     cursor.execute("SELECT email FROM users WHERE id=?", (user_id,))
     user_email = cursor.fetchone()[0].split("@")[0].title()
 
-    # Handle adding tasks
+    message = ""  # default
+
+    # Adding tasks
     if request.method == "POST":
         title = request.form["title"]
         description = request.form["description"]
         due_date_str = request.form["due_date"]
         label = request.form.get("label", "")
         progress = int(request.form.get("progress", 0))
-
-
-
 
         try:
             due_date = datetime.strptime(due_date_str, '%Y-%m-%dT%H:%M')
@@ -539,36 +652,82 @@ def home():
             due_date_formatted = "Invalid date"
 
         cursor.execute("""
-            INSERT INTO tasks (user_id, title, description, due_date, label, progress)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (user_id, title, description, due_date_formatted, label, progress))
+            SELECT id FROM tasks WHERE user_id=? AND title=? AND due_date=?
+        """, (user_id, title, due_date_formatted))
         existing_task = cursor.fetchone()
 
-        if not existing_task:
+        if existing_task:
+            connection.close()
+            return render_template_string(
+                home_template,
+                tasks=[],
+                user_email=user_email,
+                message="Task with this title and due date already exists."
+                )
+        else:
             cursor.execute("""
                 INSERT INTO tasks (user_id, title, description, due_date, label, progress)
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
             """, (user_id, title, description, due_date_formatted, label, progress))
             connection.commit()
+            connection.close()
+            return redirect(url_for("home"))
 
-    # Handle filtering
-    query = request.args.get("query", "").strip()
-    fields = request.args.getlist("fields")
 
-    if query and fields:
-        conditions = " OR ".join([f"{field} LIKE ?" for field in fields])
-        params = [f"%{query}%"] * len(fields)
-        cursor.execute(f"""
-            SELECT title, description, due_date, label, progress FROM tasks
-            WHERE user_id=? AND ({conditions})
-        """, [user_id] + params)
-    else:
-        cursor.execute("SELECT title, description, due_date, label, progress FROM tasks WHERE user_id=?", (user_id,))
-
-    tasks = [{'title': row[0], 'description': row[1], 'due_date': row[2], 'label': row[3], 'progress' : row[4]} for row in cursor.fetchall()]
+    # Fetch tasks
+    cursor.execute("SELECT title, description, due_date, label, progress FROM tasks WHERE user_id=?", (user_id,))
+    rows = cursor.fetchall()
     connection.close()
 
-    return render_template_string(home_template, tasks=tasks, user_email=user_email)
+    tasks = []
+    due_soon = []
+    today = datetime.now().date()
+    tomorrow = today + timedelta(days=1)
+
+    for row in rows:
+        title, description, due_date, label, progress = row
+        try:
+            parsed_date = datetime.strptime(due_date, "%Y-%m-%d %H:%M").date()
+        except ValueError:
+            parsed_date = datetime.strptime(due_date, "%Y-%m-%dT%H:%M").date()
+
+        tasks.append({
+            'title': title,
+            'description': description,
+            'due_date': due_date,
+            'label': label,
+            'progress': progress
+        })
+
+        if parsed_date in [today, tomorrow]:
+            due_soon.append(title)
+
+    # If no duplicate message, but tasks are due soon
+    if not message and due_soon:
+        message = "Task due soon."
+
+    return render_template_string(home_template, tasks=tasks, user_email=user_email, message=message)
+
+
+
+# To test if the tasks are added correctly
+@app.route("/completed")
+def completed():
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+
+    connection = sqlite3.connect("NEA.db")
+    cursor = connection.cursor()
+    cursor.execute("SELECT title, description, due_date, label, completed_at FROM completed_tasks WHERE user_id=?", (user_id,))
+    rows = cursor.fetchall()
+    connection.close()
+
+    completed_html = "<h2>Completed Tasks</h2>"
+    for row in rows:
+        completed_html += f"<div><strong>{row[0]}</strong> - {row[1]} (Due: {row[2]}, Completed: {row[4]})</div>"
+    return completed_html
+
 
 
 
@@ -836,6 +995,95 @@ def delete_event_day():
 
 
 
+# Analytics template
+
+analysis_template = """
+<!doctype html>
+<html>
+<head>
+    <title>Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h2>Task Completion Analytics</h2>
+    <p>Total tasks this month: {{ total }}</p>
+    <p>Completed tasks: {{ completed }}</p>
+    <p>Completion percentage: {{ percent|round(2) }}%</p>
+
+    <canvas id="completionChart" style="width:350; height:350px;"></canvas>
+    <script>
+        const ctx = document.getElementById('completionChart').getContext('2d');
+        const completionChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Completed', 'Incomplete'],
+                datasets: [{
+                    data: [{{ completed }}, {{ total - completed }}],
+                    backgroundColor: ['#4CAF50', '#FF5252']
+                }]
+            },
+            options: {
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Tasks Completed This Month'
+                        }
+                    }
+                }
+        });
+    </script>
+</body>
+</html>
+"""
+
+
+#  Anayltics route
+
+@app.route("/analysis")
+def analysis():
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+
+    connection = sqlite3.connect("NEA.db")
+    cursor = connection.cursor()
+
+    # Get current month and year
+    now = datetime.now()
+    year = now.year
+    month = now.month
+
+    # Count tasks created this month
+    cursor.execute("""
+        SELECT COUNT(*) FROM tasks
+        WHERE user_id=? AND strftime('%Y', due_date)=? AND strftime('%m', due_date)=?
+    """, (user_id, str(year), f"{month:02d}"))
+    active_count = cursor.fetchone()[0]
+
+    # Count completed tasks this month
+    cursor.execute("""
+        SELECT COUNT(*) FROM completed_tasks
+        WHERE user_id=? AND strftime('%Y', completed_at)=? AND strftime('%m', completed_at)=?
+    """, (user_id, str(year), f"{month:02d}"))
+    completed_count = cursor.fetchone()[0]
+
+    connection.close()
+
+    total = active_count + completed_count
+    percent_completed = (completed_count / total * 100) if total > 0 else 0
+
+    return render_template_string(analysis_template,
+                                  total=total,
+                                  completed=completed_count,
+                                  percent=percent_completed)
+
+
+
+
+
+
 
 
 @app.route("/logout")
@@ -883,11 +1131,16 @@ def logout():
  |
  |
  |   Cycle 2:
- |-> Smart Schdueling (Time tabling) enter free hours/days, add events and create time table (Calender view) ID: 11
- |-> check if Date has already passed ID: 19
- |-> Overlapping Tasks ID: 17
- |-> Out of hours/ Unavaliable ID: 18
- |-> Filtering ID: 22,23
+ |
+ | ->
+ | ->
+ | ->
+ | ->
+
+
+
+
+
 
 Add more text to explainations/objective and refceltions
 Add comments (in word) to pictures to descibe what each image is
