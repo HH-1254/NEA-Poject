@@ -662,7 +662,7 @@ def home():
                 home_template,
                 tasks=[],
                 user_email=user_email,
-                message="Task with this title and due date already exists."
+                message="Task with this title and due date already exists. Press Home to return."
                 )
         else:
             cursor.execute("""
@@ -742,8 +742,6 @@ scheduling_template = """
     <link rel="stylesheet" href="{{ url_for('static', filename='calendar.css') }}">
 </head>
 <body>
-    <h2>Welcome, {{ user_email }}</h2>
-
     <header class="site-header">
         <nav class="navbar">
             <a href="/home">Home</a>
@@ -1003,8 +1001,21 @@ analysis_template = """
 <head>
     <title>Analytics</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='calendar.css') }}">
 </head>
 <body>
+
+    <header class="site-header">
+        <nav class="navbar">
+            <a href="/home">Home</a>
+            <a href="/analysis">Analytics</a>
+            <a href="/logout">Log Out</a>
+            <a href="/Scheduling">Scheduling</a>
+        </nav>
+    </header>
+
+
+
     <h2>Task Completion Analytics</h2>
     <p>Total tasks this month: {{ total }}</p>
     <p>Completed tasks: {{ completed }}</p>
