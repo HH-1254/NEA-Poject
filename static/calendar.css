@@ -1,42 +1,194 @@
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 10px;
-            border: 1px solid #ccc;
-            text-align: left ;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        .site-header {
-            background-color: #333;
-            padding: 10px;
-        }
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background-color:var(--primary) 50%;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+th, td {
+    padding: 10px;
+    border: 1px solid #ccc;
+    text-align: left ;
+}
 
-        h5 {
-            text-align: center ;
-        }
-        .navbar {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-around;
-        }
+h5 {
+    text-align: center ;
+}
+/* ===== CSS VARIABLES ===== */
+:root {
+    --primary: #ffffff;   /* Main background */
+    --secondary: #ffcc00; /* Accents, buttons */
+    --text: #222222;      /* Text color */
+    --border: #cccccc;    /* Borders */
+}
 
-        .navbar a {
-            color: white;
-            text-decoration: none;
-            padding: 10px;
-        }
+/* ===== NAVBAR ===== */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--primary);
+    padding: 10px 20px;
+    position: relative;
+    z-index: 1002;
+}
+.navbar a {
+    color: var(--text);
+    text-decoration: none;
+    margin-right: 15px;
+    font-weight: bold;
+}
+.navbar a:hover,
+.navbar .active {
+    color: var(--secondary);
+}
 
-        @media (max-width: 600px) {
-    .navbar {
-        flex-direction: column;
-        align-items: center;
-        }
-    }
+/* ===== NAV RIGHT ===== */
+.nav-right {
+    display: flex;
+    align-items: center;
+}
+
+/* ===== NOTIFICATIONS ===== */
+.notification {
+    position: relative;
+    margin-right: 20px;
+}
+.bell {
+    font-size: 22px;
+    color: var(--text);
+    cursor: pointer;
+}
+.badge {
+    position: absolute;
+    top: -6px;
+    right: -10px;
+    background: red;
+    color: white;
+    border-radius: 50%;
+    padding: 3px 7px;
+    font-size: 11px;
+}
+
+/* Reminder & Settings Dropdowns */
+.reminder-box,
+.settings-box {
+    display: none;
+    position: absolute;
+    top: 30px;
+    right: 0;
+    background-color: var(--primary);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 12px;
+    width: 220px;
+    z-index: 1003;
+}
+.reminder-box ul {
+    padding-left: 18px;
+    margin: 5px 0;
+}
+.settings-box hr {
+    margin: 10px 0;
+    border-color: var(--border);
+}
+
+/* ===== SETTINGS ICON ===== */
+.gear {
+    font-size: 22px;
+    color: var(--text);
+    cursor: pointer;
+}
+
+/* ===== OVERLAY ===== */
+#overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1001;
+}
+
+/* ===== TASKS ===== */
+.task {
+    margin-bottom: 10px;
+    padding: 10px;
+    color: var(--text);
+    border: 1px solid var(--secondary);
+    background-color: #ffffff; /* Kept readable background */
+}
+
+/* ===== BUTTONS ===== */
+button {
+    cursor: pointer;
+    background-color: var(--secondary);
+    color: var(--primary);
+    border: none;
+    padding: 8px 12px;
+}
+
+/* ===== FORMS & MODALS ===== */
+#taskForm,
+#editForm,
+#filterForm,
+#settingsForm,
+.popup-form {
+    display: none;
+    position: fixed;
+    background-color: var(--primary);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 20px;
+    z-index: 1003;
+    width: 320px;
+}
+#taskForm,
+#editForm,
+#filterForm,
+#settingsForm {
+    top: 25%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.popup-form {
+    top: 25%;
+    left: 35%;
+}
+
+/* Inputs */
+input,
+textarea,
+select {
+    background-color: var(--primary);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px;
+    width: 100%;
+    margin: 8px 0;
+}
+
+/* Headings & Labels */
+label,
+h1, h2, h3, h4 {
+    color: var(--text);
+}
+
+
+* {
+    box-sizing: border-box;
+}
+
+
+html, body {
+    background-color: var(--primary);
+    color: var(--text);
+    font-family: Arial, sans-serif;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+

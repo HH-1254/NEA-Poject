@@ -1,52 +1,98 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Task Manager</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .task { margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; }
-        #taskForm { display: none; position: fixed; top: 20%; left: 35%; background: #fff; padding: 20px; border: 2px solid #333; }
-        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
-    </style>
+    <title>{% block title %}My App{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='home.css') }}">
 </head>
-<body>
-    <h1>Task Manager</h1>
-    <button onclick="showForm()">Add Task</button>
+<body class="light-theme">
 
-    <div id="overlay" onclick="hideForm()"></div>
+    <!-- ✅ Navbar -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <a href="/home">Home</a>
+            <a href="/analysis">Analytics</a>
+            <a href="/Scheduling">Scheduling</a>
+            <a href="/logout">Log Out</a>
+        </div>
+        <div class="nav-right">
+            <!-- 🔔 Notification Bell -->
+            <div class="notification">
+                <span class="bell" onclick="toggleReminders()">&#128276;</span>
+                {% if unread_count > 0 %}
+                    <span class="badge">{{ unread_count }}</span>
+                {% endif %}
+                <div id="reminderBox" class="reminder-box">
+                    <strong>Tasks Due Soon:</strong>
+                    <ul>
+                        {% for task in due_tomorrow %}
+                            <li>{{ task }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            <!-- ⚙️ Settings Gear -->
+            <div class="settings">
+                <span class="gear" onclick="toggleSettings()">&#9881;</span>
+            </div>
+        </div>
+    </nav>
 
-    <div id="taskForm">
-        <form method="POST">
-            <label>Title:</label><br>
-            <input type="text" name="title" required><br><br>
-            <label>Description:</label><br>
-            <textarea name="description" required></textarea><br><br>
-            <label>Due Date:</label><br>
-            <input type="datetime-local" name="due_date" required><br><br>
-            <button type="submit">Add Task</button>
-            <button type="button" onclick="hideForm()">Cancel</button>
+    <!-- ✅ Settings Island -->
+    <div id="settingsForm">
+        <form onsubmit="applySettings(); return false;">
+            <h2>Settings</h2>
+
+            <label>Theme:</label><br>
+            <select id="themeSelect">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="blue">Blue</option>
+            </select><br><br>
+
+            <label>Notifications:</label><br>
+            <input type="checkbox" id="notifToggle" checked> Enable reminders<br><br>
+
+            <label>Account:</label><br>
+            <button type="button">Manage Account</button><br><br>
+
+            <button type="submit">Confirm</button>
+            <button type="button" onclick="hideSettings()">Close</button>
         </form>
     </div>
 
-    <h2>Tasks</h2>
-    {% for task in tasks %}
-        <div class="task">
-            <strong>{{ task.title }}</strong><br>
-            {{ task.description }}<br>
-            <em>Due: {{ task.due_date }}</em>
-        </div>
-    {% endfor %}
+    <!-- Overlay -->
+    <div id="overlay"></div>
 
+    <!-- ✅ Page-specific content -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- ✅ Scripts -->
     <script>
-        function showForm() {
-            document.getElementById('taskForm').style.display = 'block';
-            document.getElementById('overlay').style.display = 'block';
-        }
-        function hideForm() {
-            document.getElementById('taskForm').style.display = 'none';
-            document.getElementById('overlay').style.display = 'none';
-        }
+    function toggleReminders() {
+        const box = document.getElementById("reminderBox");
+        box.style.display = box.style.display === "none" ? "block" : "none";
+    }
+    function toggleSettings() {
+        document.getElementById('settingsForm').style.display = 'block';
+        document.getElementById('overlay').style.display = 'block';
+    }
+    function hideSettings() {
+        document.getElementById('settingsForm').style.display = 'none';
+        document.getElementById('overlay').style.display = 'none';
+    }
+    function applySettings() {
+        const theme = document.getElementById('themeSelect').value;
+        document.body.classList.remove('light-theme','dark-theme','blue-theme');
+        document.body.classList.add(theme + '-theme');
+
+        const notifEnabled = document.getElementById('notifToggle').checked;
+        console.log("Notifications enabled:", notifEnabled);
+
+        hideSettings();
+    }
     </script>
 </body>
 </html>
