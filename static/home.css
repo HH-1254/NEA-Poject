@@ -14,7 +14,7 @@ body {
 /* ===== CSS VARIABLES ===== */
 :root {
     --primary: #000000;   /* Main background */
-    --secondary: #00a3a0; /* Accents, buttons */
+    --secondary: #18a300; /* Accents, buttons */
     --text: #222222;      /* Text color */
     --border: #cccccc;    /* Borders */
 }

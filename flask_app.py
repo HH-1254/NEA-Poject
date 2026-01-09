@@ -1311,7 +1311,7 @@ analysis_template = """
         /* ===== CSS VARIABLES ===== */
         :root {
             --primary: #ffffff;   /* Main background */
-            --secondary: #ffcc00; /* Accents, buttons */
+            --secondary: #18a300; /* Accents, buttons */
             --text: #222222;      /* Text color */
             --border: #cccccc;    /* Borders */
         }
